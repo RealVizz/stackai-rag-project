@@ -7,7 +7,6 @@ from pathlib import Path
 
 _db_lock = threading.Lock()
 
-# --- In-Memory Cache --- { "user_id": { "chat_id": [ {chunk}, {chunk}, ... ] } }
 VECTOR_STORE: dict[str, dict[str, list[dict]]] = {}
 
 def _save_to_disk():
@@ -25,7 +24,6 @@ def _save_to_disk():
     except Exception as e:
         print(f"Error saving to disk: {e}")
 
-# --- Public Functions ---
 
 def load_from_persistent_storage():
     """
@@ -68,7 +66,7 @@ def add_embeddings(user_id: str, chat_id: str, source_file: str, chunks: list[st
             }
             VECTOR_STORE[user_id][chat_id].append(data_entry)
 
-        _save_to_disk()  # After updating in-memory, save to disk ""while still holding the lock""
+        _save_to_disk()
 
     return None
 

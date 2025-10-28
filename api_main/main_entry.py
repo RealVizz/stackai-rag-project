@@ -1,15 +1,20 @@
-from fastapi import FastAPI, Form, UploadFile, File, HTTPException
+from contextlib import asynccontextmanager
+import shutil
 import uuid
 
-from config.config import BASE_STORAGE_RAW_DATA_FOLDER
-import shutil
+from fastapi import FastAPI, Form, UploadFile, File, HTTPException
 
+from config.config import BASE_STORAGE_RAW_DATA_FOLDER
 from api_main.utils.pdf_helper import process_pdf
 from api_main.utils.mistral_helper import get_embeddings_from_str_list
-from api_main.utils.vector_db_helper import add_embeddings
+from api_main.utils.vector_db_helper import add_embeddings, load_from_persistent_storage
 
-app = FastAPI()
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    load_from_persistent_storage()
+    yield
+app = FastAPI(lifespan=lifespan)
 
 @app.get("/")
 async def heartbeat():
@@ -53,3 +58,4 @@ async def upload_pdf_file(user_id: str = Form(...), chat_id: str = Form(...), fi
         "status": "success",
         "message": "File uploaded successfully.",
     }
+
