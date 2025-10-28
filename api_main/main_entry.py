@@ -4,6 +4,10 @@ import uuid
 from config.config import BASE_STORAGE_RAW_DATA_FOLDER
 import shutil
 
+from api_main.utils.pdf_helper import process_pdf
+from api_main.utils.mistral_helper import get_embeddings_from_str_list
+from api_main.utils.vector_db_helper import add_embeddings
+
 app = FastAPI()
 
 
@@ -38,11 +42,14 @@ async def upload_pdf_file(user_id: str = Form(...), chat_id: str = Form(...), fi
         with full_file_path.open("wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
+        text_chunks = process_pdf(full_file_path)
+        embeddings = get_embeddings_from_str_list(text_chunks)
+        add_embeddings(user_id, chat_id, file_uuid, text_chunks, embeddings)
+
     finally:
         await file.close()
 
     return {
         "status": "success",
         "message": "File uploaded successfully.",
-        # "saved_path": str(full_file_path)  # Return the path as a string
     }
