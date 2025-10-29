@@ -2,13 +2,15 @@ from contextlib import asynccontextmanager
 import shutil
 import uuid
 
-from fastapi import FastAPI, Form, UploadFile, File, HTTPException
+from fastapi import FastAPI, Form, UploadFile, File, HTTPException, Request
 
 from config.config import BASE_STORAGE_RAW_DATA_FOLDER
 from api_main.utils.pdf_helper import process_pdf
-from api_main.utils.mistral_helper import get_embeddings_from_str_list
-from api_main.utils.vector_db_helper import add_embeddings, load_from_persistent_storage
+from api_main.utils.mistral_helper import get_embeddings_from_str_list, get_embedding_from_str, get_llm_response
+from api_main.utils.vector_db_helper import add_embeddings, load_from_persistent_storage, get_top_k_vector_results
 
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -49,7 +51,7 @@ async def upload_pdf_file(user_id: str = Form(...), chat_id: str = Form(...), fi
 
         text_chunks = process_pdf(full_file_path)
         embeddings = get_embeddings_from_str_list(text_chunks)
-        add_embeddings(user_id, chat_id, file_uuid, text_chunks, embeddings)
+        add_embeddings(user_id, chat_id, file_uuid, file.filename, text_chunks, embeddings)
 
     finally:
         await file.close()
@@ -59,3 +61,30 @@ async def upload_pdf_file(user_id: str = Form(...), chat_id: str = Form(...), fi
         "message": "File uploaded successfully.",
     }
 
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    return JSONResponse(
+        status_code=422,
+        content={
+            "message": "Invalid input. Please provide all required fields.",
+            # "errors": exc.errors()  # Include validation error details
+        },
+    )
+
+@app.post("/query/")
+async def query(user_id: str = Form(...), chat_id: str = Form(...), query_str: str = Form(...)):
+    if not chat_id.strip() or not user_id.strip() or not query_str.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="All 'chat_id', 'user_id' and 'query_str' are required and cannot be empty."
+        )
+
+    query_embeddings = get_embedding_from_str(query_str)
+    vector_res = get_top_k_vector_results(user_id, chat_id, query_embeddings, k=5, threshold=0.5)
+    resp = get_llm_response(query_str, vector_res, [], [], max_tokens=8192)
+
+    return {
+        "status": "success",
+        "resp": resp
+    }
