@@ -32,7 +32,7 @@ def _save_to_disk():
         print(f"Error saving to disk: {e}")
 
 
-def load_from_persistent_storage():
+def load_vector_db_from_persistent_storage():
     """
     This is called on server startup, is thread-safe.
     """

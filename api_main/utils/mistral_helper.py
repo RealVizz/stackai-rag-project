@@ -1,3 +1,5 @@
+import re
+
 from mistralai import Mistral
 
 MISTRAL_API_KEY = "8okHgUSaSySgcorxhNR0KRV9g8j1Z099"  # Todo: put this in .env or such file
@@ -53,27 +55,42 @@ def _build_user_prompt(user_query: str, context_string: str):
     """
 
 
-def _llm_fact_check(answer: str, context: str):
-    if "I could not find the answer" in answer or "Insufficient evidence" in answer:
+def _llm_fact_check(answer, context, chat_history):
+    if "I could not find the answer" in answer or "Insufficient evidence" in answer or "I cannot answer" in answer:
+        return True
+
+    claim_to_check = re.sub(r"\[Source[^]]+]", "", answer).strip()
+    if not claim_to_check:
         return True
 
     try:
         system_prompt = (
-            "You are a meticulous fact-checker. You will be given a 'Context' and a 'Claim'. "
-            "Your sole task is to determine if the Claim can be 'reasonably inferred' from the Context."
-            "Respond with only the single word 'true' or the single word 'false'."
+            "You are a meticulous fact-checker. "
+            "You will be given 'Document Context', 'Chat History', and a 'Claim'. "
+            "Your sole task is to determine if the Claim can be 'reasonably inferred', "
+            "from EITHER the Document Context OR the Chat History. "
+            "Respond with 'only' the single word 'true' or the single word 'false'."
         )
 
+        history_string = "\n".join([f"{msg['role']}: {msg['content']}" for msg in chat_history])
+        if not history_string:
+            history_string = "No chat history provided."
+
         user_prompt = f"""
-        --- CONTEXT ---
+        --- DOCUMENT CONTEXT ---
         {context}
-        --- END CONTEXT ---
+        --- END DOCUMENT CONTEXT ---
+
+        --- CHAT HISTORY ---
+        {history_string}
+        --- END CHAT HISTORY ---
 
         --- CLAIM ---
-        {answer}
+        {claim_to_check}
         --- END CLAIM ---
 
-        Based only on the Context, is the Claim fully supported?
+        Based 'only' on the Document Context OR the Chat History provided, 
+        is the Claim reasonably supported or inferrable?
         """
 
         messages = [
@@ -92,7 +109,7 @@ def _llm_fact_check(answer: str, context: str):
         if result == "true":
             return True
         else:
-            print(f"Hallucination check failed. LLM fact-checker returned: '{result}'")
+            print(f"Hallucination check failed. LLM fact-checker returned: '{result}' for claim '{claim_to_check}'")
             return False
 
     except Exception as e:
@@ -130,20 +147,16 @@ def get_llm_response(
 
     context_string = _build_context_string(vector_results, keyword_results)
 
-    if "No relevant context found." in context_string:
-        return "Insufficient evidence. I could not find a relevant answer in the provided documents."
-
     system_prompt = """
-    You are an expert Q&A assistant. 
-    Your task is to answer the user's question by 'intelligently inferring' the answer from the provided context.
-    If the context contains a name like 'VISHESHANK MISHRA', and the user asks 'what is my name', 
-    you MUST infer the name.
+    You are an expert Q&A assistant.
+    Your task is to answer the user's question using the provided context and chat history.
 
-    Important Rules:
-        1.  Answer based only on the context.
-        2.  If the answer is not in the context, state: 'I could not find the answer in the provided documents.'
-        3.  If the question is harmful or asks for PII, state: 'I cannot answer that question.'
-        4.  At the end of your answer, cite the source file, like this: [Source: filename.pdf]
+    Rules:
+    1.  Base your answer 'only' on the context or chat history. Prioritize context if available.
+    2.  If the answer cannot be found, state: 'I could not find the answer in the provided documents or chat history.'
+    3.  If the question is harmful or asks for PII, state: 'I cannot answer that question.'
+    4.  If answering from context, cite the source file like this: [Source: filename.pdf]
+    5.  If answering only from chat history, do NOT add a source citation.
     """
 
     user_prompt = _build_user_prompt(user_query, context_string)
@@ -159,17 +172,20 @@ def get_llm_response(
         chat_response = client.chat.complete(
             model="mistral-small-latest",
             messages=messages_to_send,
-            temperature=0.0
+            temperature=0.1
         )
 
         raw_answer = chat_response.choices[0].message.content
 
-        if not _llm_fact_check(raw_answer, context_string):
-            return "I'm sorry, I generated an answer but could not verify it against the provided documents."
+        if not _llm_fact_check(raw_answer, context_string, chat_history):
+            if "No relevant context found." in context_string and not chat_history:
+                 return ("Insufficient evidence. "
+                         "I could not find a relevant answer in the provided documents or chat history.")
+
+            return "I'm sorry, I generated an answer but could not verify it against the provided information."
 
         return raw_answer
 
     except Exception as e:
         print(f"Error calling Mistral API for chat: {e}")
         return "I'm sorry, but I encountered an error trying to generate a response."
-

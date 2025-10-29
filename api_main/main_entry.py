@@ -7,14 +7,24 @@ from fastapi import FastAPI, Form, UploadFile, File, HTTPException, Request
 from config.config import BASE_STORAGE_RAW_DATA_FOLDER
 from api_main.utils.pdf_helper import process_pdf
 from api_main.utils.mistral_helper import get_embeddings_from_str_list, get_embedding_from_str, get_llm_response
-from api_main.utils.vector_db_helper import add_embeddings, load_from_persistent_storage, get_top_k_vector_results
+from api_main.utils.vector_db_helper import (
+    add_embeddings,
+    load_vector_db_from_persistent_storage,
+    get_top_k_vector_results
+)
+from api_main.utils.chat_memory_helper import (
+    load_chat_from_persistent_storage,
+    get_chat_history,
+    add_chat_turn
+)
 
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    load_from_persistent_storage()
+    load_vector_db_from_persistent_storage()
+    load_chat_from_persistent_storage()
     yield
 app = FastAPI(lifespan=lifespan)
 
@@ -81,9 +91,14 @@ async def query(user_id: str = Form(...), chat_id: str = Form(...), query_str: s
         )
 
     query_embeddings = get_embedding_from_str(query_str)
-    vector_res = get_top_k_vector_results(user_id, chat_id, query_embeddings, k=5, threshold=0.5)
-    resp = get_llm_response(query_str, vector_res, [], [], max_tokens=8192)
+    if not query_embeddings:
+        raise HTTPException(status_code=500, detail="Failed to generate query embedding.")
 
+    vector_res = get_top_k_vector_results(user_id, chat_id, query_embeddings, k=5, threshold=0.5)
+    current_chat_history = get_chat_history(user_id, chat_id)
+    resp = get_llm_response(user_query=query_str, vector_results=vector_res, keyword_results=[],
+                            chat_history=current_chat_history, max_tokens=8192)
+    add_chat_turn(user_id, chat_id, query_str, resp)
     return {
         "status": "success",
         "resp": resp
