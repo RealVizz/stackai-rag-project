@@ -17,6 +17,11 @@ from api_main.utils.chat_memory_helper import (
     get_chat_history,
     add_chat_turn
 )
+from api_main.utils.keyword_db_helper import (
+    load_keyword_db_from_persistent_storage,
+    add_chunks_to_index,
+    search_keywords
+)
 
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -25,6 +30,7 @@ from fastapi.responses import JSONResponse
 async def lifespan(app: FastAPI):
     load_vector_db_from_persistent_storage()
     load_chat_from_persistent_storage()
+    load_keyword_db_from_persistent_storage()
     yield
 app = FastAPI(lifespan=lifespan)
 
@@ -61,7 +67,8 @@ async def upload_pdf_file(user_id: str = Form(...), chat_id: str = Form(...), fi
 
         text_chunks = process_pdf(full_file_path)
         embeddings = get_embeddings_from_str_list(text_chunks)
-        add_embeddings(user_id, chat_id, file_uuid, file.filename, text_chunks, embeddings)
+        new_chunk_data = add_embeddings(user_id, chat_id, file_uuid, file.filename, text_chunks, embeddings)
+        add_chunks_to_index(user_id, chat_id, new_chunk_data)
 
     finally:
         await file.close()
@@ -95,8 +102,9 @@ async def query(user_id: str = Form(...), chat_id: str = Form(...), query_str: s
         raise HTTPException(status_code=500, detail="Failed to generate query embedding.")
 
     vector_res = get_top_k_vector_results(user_id, chat_id, query_embeddings, k=5, threshold=0.5)
+    keyword_res = search_keywords(user_id, chat_id, query_str)
     current_chat_history = get_chat_history(user_id, chat_id)
-    resp = get_llm_response(user_query=query_str, vector_results=vector_res, keyword_results=[],
+    resp = get_llm_response(user_query=query_str, vector_results=vector_res, keyword_results=keyword_res,
                             chat_history=current_chat_history, max_tokens=8192)
     add_chat_turn(user_id, chat_id, query_str, resp)
     return {

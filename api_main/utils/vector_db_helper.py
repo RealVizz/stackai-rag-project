@@ -56,6 +56,8 @@ def add_embeddings(user_id: str, chat_id: str, source_file_uuid: str, source_fil
                    chunks: list[str], embeddings: list[list[float]]):
     global VECTOR_STORE
 
+    new_data_entries = []
+
     with _db_lock:  # Acquiring the lock for the entire operation
         if user_id not in VECTOR_STORE:
             VECTOR_STORE[user_id] = {}
@@ -74,10 +76,12 @@ def add_embeddings(user_id: str, chat_id: str, source_file_uuid: str, source_fil
                 "embedding": embedding
             }
             VECTOR_STORE[user_id][chat_id].append(data_entry)
+            new_data_entries.append(data_entry)
 
         _save_to_disk()
 
-    return None
+    # Return the newly created chunk data so it can be indexed
+    return new_data_entries
 
 
 def get_vector_store_chat_data(user_id: str, chat_id: str):
