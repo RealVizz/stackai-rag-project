@@ -111,3 +111,22 @@ async def query(user_id: str = Form(...), chat_id: str = Form(...), query_str: s
         "status": "success",
         "resp": resp
     }
+
+
+@app.post("/get-chat-history/")
+async def get_chat_history_endpoint(user_id: str = Form(...), chat_id: str = Form(...)):
+    if not chat_id.strip() or not user_id.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Both 'chat_id' and 'user_id' are required and cannot be empty."
+        )
+
+    try:
+        history = get_chat_history(user_id, chat_id)
+        return {
+            "status": "success",
+            "history": history
+        }
+    except Exception as e:
+        print(f"Error retrieving chat history: {e}")
+        raise HTTPException(status_code=500, detail="Could not retrieve chat history.")
