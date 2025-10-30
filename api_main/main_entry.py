@@ -15,7 +15,7 @@ from api_main.utils.vector_db_helper import (
 from api_main.utils.chat_memory_helper import (
     load_chat_from_persistent_storage,
     get_chat_history,
-    add_chat_turn, get_all_user_ids
+    add_chat_turn, get_all_user_ids, get_all_chat_ids_for_user
 )
 from api_main.utils.keyword_db_helper import (
     load_keyword_db_from_persistent_storage,
@@ -144,4 +144,28 @@ async def get_users():
         raise HTTPException(
             status_code=500,
             detail="Could not retrieve user list."
+        )
+
+
+@app.post("/chats/")
+async def get_chats_for_user(user_id: str = Form(...)):
+    if not user_id.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="'user_id' is required and cannot be empty."
+        )
+
+    try:
+        chat_ids = get_all_chat_ids_for_user(user_id)
+
+        return {
+            "status": "success",
+            "user_id": user_id,
+            "chat_ids": chat_ids
+        }
+    except Exception as e:
+        print(f"Error retrieving chat list: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Could not retrieve chat list."
         )
