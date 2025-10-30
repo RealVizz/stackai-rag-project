@@ -15,7 +15,7 @@ from api_main.utils.vector_db_helper import (
 from api_main.utils.chat_memory_helper import (
     load_chat_from_persistent_storage,
     get_chat_history,
-    add_chat_turn
+    add_chat_turn, get_all_user_ids
 )
 from api_main.utils.keyword_db_helper import (
     load_keyword_db_from_persistent_storage,
@@ -130,3 +130,18 @@ async def get_chat_history_endpoint(user_id: str = Form(...), chat_id: str = For
     except Exception as e:
         print(f"Error retrieving chat history: {e}")
         raise HTTPException(status_code=500, detail="Could not retrieve chat history.")
+
+@app.get("/users/")
+async def get_users():
+    try:
+        user_ids = get_all_user_ids()
+        return {
+            "status": "success",
+            "user_ids": user_ids
+        }
+    except Exception as e:
+        print(f"Error retrieving user list: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Could not retrieve user list."
+        )

@@ -52,3 +52,7 @@ def get_chat_history(user_id: str, chat_id: str):
     with _chat_lock:
         history = CHAT_HISTORY_STORE.get(user_id, {}).get(chat_id, [])
         return list(history)
+
+def get_all_user_ids():
+    with _chat_lock:
+        return list(CHAT_HISTORY_STORE.keys())
