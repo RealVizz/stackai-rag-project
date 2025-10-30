@@ -5,3 +5,4 @@ mistralai
 pdfplumber
 numpy
 ruff
+python-dotenv

@@ -2,7 +2,7 @@ import re
 
 from mistralai import Mistral
 
-MISTRAL_API_KEY = "8okHgUSaSySgcorxhNR0KRV9g8j1Z099"  # Todo: put this in .env or such file
+from config.config import MISTRAL_API_KEY
 
 client = Mistral(api_key=MISTRAL_API_KEY)
 
