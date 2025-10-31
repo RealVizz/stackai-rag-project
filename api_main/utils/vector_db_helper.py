@@ -1,12 +1,14 @@
 import json
 import os
-import uuid
 import threading
-from config.config import VECTOR_DB_FILE_PATH
+import uuid
+from enum import Enum
 from pathlib import Path
 
 import numpy as np
-from enum import Enum
+
+from config.config import VECTOR_DB_FILE_PATH
+
 
 class SimilarityMetric(Enum):
     COSINE = "cosine"
@@ -156,18 +158,15 @@ def _calculate_similarity_scores(
 
 
 def get_top_k_vector_results(
-        user_id: str,
-        chat_id: str,
+        chat_chunks_data: list[dict],
         query_embedding: list[float],
         k: int = 5,
         threshold: float = 0.5,
         metric: SimilarityMetric = SimilarityMetric.COSINE):
-
-    chat_unique_vector_db_data = get_vector_store_chat_data(user_id, chat_id)
-    if not chat_unique_vector_db_data:
+    if not chat_chunks_data:
         return []
 
-    unique_chunks = _get_unique_chunks_from(chat_unique_vector_db_data)
+    unique_chunks = _get_unique_chunks_from(chat_chunks_data)
 
     relevant_chunks = _calculate_similarity_scores(
         unique_chunks,

@@ -3,10 +3,8 @@ import os
 import re
 import threading
 from pathlib import Path
+
 from config.config import KEYWORD_DB_FILE_PATH
-
-from api_main.utils import vector_db_helper
-
 
 _db_lock = threading.Lock()
 
@@ -80,11 +78,9 @@ def _find_matching_chunk_ids(chat_index: dict, query_tokens: list[str]):
         return set()
 
 
-def _build_results_from_chunk_ids(user_id: str, chat_id: str, chunk_ids: set):
+def _build_results_from_chunk_ids(all_chat_chunks: list[dict], chunk_ids: set):
     if not chunk_ids:
         return []
-
-    all_chat_chunks = vector_db_helper.get_vector_store_chat_data(user_id, chat_id)
 
     # Creating a quick-lookup map for all chunks.
     all_chunks_map = {chunk["chunk_id"]: chunk for chunk in all_chat_chunks}
@@ -136,7 +132,7 @@ def add_chunks_to_index(user_id: str, chat_id: str, chunks: list[dict]):
         _save_to_disk()
 
 
-def search_keywords(user_id: str, chat_id: str, query_str: str):
+def search_keywords(user_id: str, chat_id: str, query_str: str, all_chat_chunks: list[dict]):
     chat_index = _get_chat_index(user_id, chat_id)
     if not chat_index:
         return []
@@ -149,5 +145,4 @@ def search_keywords(user_id: str, chat_id: str, query_str: str):
     if not matching_chunk_ids:
         return []
 
-    return _build_results_from_chunk_ids(user_id, chat_id, matching_chunk_ids)
-
+    return _build_results_from_chunk_ids(all_chat_chunks, matching_chunk_ids)
