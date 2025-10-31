@@ -134,19 +134,12 @@ def _euclidean_distance(v1: np.ndarray, v2: np.ndarray):
     return np.linalg.norm(v1 - v2)
 
 
-def _calculate_similarity_scores(
-        chunks_list: list[dict],
-        query_embedding: list[float],
-        metric: SimilarityMetric,
-        threshold: float):
+def _calculate_similarity_scores(chunks_list: list[dict], query_embedding: list[float], metric_obj: SimilarityMetric,
+                                 threshold: float):
 
     relevant_chunks = []
     for chunk_data in chunks_list:
-        score = _calculate_similarity(
-            query_embedding,
-            chunk_data["embedding"],
-            metric
-        )
+        score = _calculate_similarity(vec1=query_embedding, vec2=chunk_data["embedding"], metric=metric_obj)
 
         if score >= threshold:
             relevant_chunks.append({
@@ -157,23 +150,15 @@ def _calculate_similarity_scores(
     return relevant_chunks
 
 
-def get_top_k_vector_results(
-        chat_chunks_data: list[dict],
-        query_embedding: list[float],
-        k: int = 5,
-        threshold: float = 0.5,
-        metric: SimilarityMetric = SimilarityMetric.COSINE):
+def get_top_k_vector_results(chat_chunks_data: list[dict], query_embedding: list[float], k: int = 5,
+                             threshold: float = 0.5, metric: SimilarityMetric = SimilarityMetric.COSINE):
+
     if not chat_chunks_data:
         return []
 
     unique_chunks = _get_unique_chunks_from(chat_chunks_data)
 
-    relevant_chunks = _calculate_similarity_scores(
-        unique_chunks,
-        query_embedding,
-        metric,
-        threshold
-    )
+    relevant_chunks = _calculate_similarity_scores(unique_chunks, query_embedding, metric, threshold)
 
     top_k_results = _sort_and_get_top_k(relevant_chunks, k)
 

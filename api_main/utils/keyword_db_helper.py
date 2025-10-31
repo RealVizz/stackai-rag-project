@@ -24,7 +24,7 @@ KEYWORD_STORE: dict[str, dict[str, dict[str, dict]]] = {}
 
 
 def _save_to_disk():
-    """Saveing the entire in-memory KEYWORD_STORE to a JSON file."""
+    """Saving the entire in-memory KEYWORD_STORE to a JSON file."""
     try:
         db_path = Path(KEYWORD_DB_FILE_PATH)
         db_path.parent.mkdir(parents=True, exist_ok=True)
