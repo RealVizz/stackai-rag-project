@@ -5,7 +5,7 @@ import uuid
 from fastapi import FastAPI, Form, UploadFile, File, HTTPException, Request
 
 from config.config import BASE_STORAGE_RAW_DATA_FOLDER
-from api_main.utils.pdf_helper import process_pdf
+from api_main.utils.pdf_helper import process_pdf,PDFProcessingError
 from api_main.utils.mistral_helper import get_embeddings_from_str_list, get_embedding_from_str, get_llm_response
 from api_main.utils.vector_db_helper import (
     add_embeddings,
@@ -54,6 +54,7 @@ async def upload_pdf_file(user_id: str = Form(...), chat_id: str = Form(...), fi
             detail="Both 'chat_id' and 'user_id' are required and cannot be empty."
         )
 
+    full_file_path = None
     try:
         file_uuid = str(uuid.uuid4())
         new_filename = f"{file_uuid}.pdf"
@@ -65,11 +66,26 @@ async def upload_pdf_file(user_id: str = Form(...), chat_id: str = Form(...), fi
         with full_file_path.open("wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
-        text_chunks = process_pdf(full_file_path)
+        try:
+            text_chunks = process_pdf(str(full_file_path))  # Use str() for Path object
+        except PDFProcessingError as e:
+            print(f"PDF processing failed for user {user_id}, chat {chat_id}: {e}")
+            if full_file_path and full_file_path.exists(): # Clean up the corrupt/unreadable file.
+                full_file_path.unlink()
+            raise HTTPException(status_code=400, detail=str(e))
+
         embeddings = get_embeddings_from_str_list(text_chunks)
         new_chunk_data = add_embeddings(user_id, chat_id, file_uuid, file.filename, text_chunks, embeddings)
         add_chunks_to_index(user_id, chat_id, new_chunk_data)
 
+
+    except HTTPException:  # Re-raising HTTPExceptions so FastAPI handles them.
+        raise
+    except Exception as e:  # Generic.
+        print(f"Unexpected error in /upload-pdf/ for user {user_id}: {e}")
+        if full_file_path and full_file_path.exists():
+            full_file_path.unlink()
+        raise HTTPException(status_code=500, detail="An unexpected server error occurred.")
     finally:
         await file.close()
 

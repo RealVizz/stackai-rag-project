@@ -2,6 +2,10 @@ import pdfplumber
 from config.config import CHUNK_SIZE, CHUNK_OVERLAP
 
 
+class PDFProcessingError(Exception):
+    pass
+
+
 def extract_text_from_pdf(file_path: str) -> str:
     full_text = ""
     try:
@@ -9,10 +13,16 @@ def extract_text_from_pdf(file_path: str) -> str:
             for page in pdf.pages:
                 page_text = page.extract_text()
                 if page_text:
-                    full_text += page_text + "\n"
+                    full_text += page_text.strip() + "\n"
+
+        if not full_text.strip():
+            raise PDFProcessingError("No text could be extracted from the PDF.")
+
         return full_text
-    except Exception:
-        return ""  # Todo : think about proper Exception and api error response/err code to return in such case.
+
+    except Exception as e:
+        print(f"Failed to process PDF file {file_path}: {e}")
+        raise PDFProcessingError(f"Failed to extract text from PDF: {e}")
 
 
 def simple_chunker(text: str, chunk_size: int, chunk_overlap: int) -> list[str]:
@@ -32,9 +42,5 @@ def simple_chunker(text: str, chunk_size: int, chunk_overlap: int) -> list[str]:
 
 def process_pdf(file_path: str) -> list[str]:
     full_text = extract_text_from_pdf(file_path)
-
-    if not full_text.strip():
-        return []
-
     return simple_chunker(full_text, CHUNK_SIZE, CHUNK_OVERLAP)
 
