@@ -14,9 +14,11 @@ class SimilarityMetric(Enum):
     COSINE = "cosine"
     EUCLIDEAN = "euclidean"
 
+
 _db_lock = threading.Lock()
 
 VECTOR_STORE: dict[str, dict[str, list[dict]]] = {}
+
 
 def _save_to_disk():
     """
@@ -54,6 +56,16 @@ def load_vector_db_from_persistent_storage():
             VECTOR_STORE = {}
 
 
+def _create_data_entry(source_file_uuid: str, source_file_name: str, chunk: str, embedding: list[float]) -> dict:
+    return {
+        "chunk_id": str(uuid.uuid4()),
+        "source_file_uuid": source_file_uuid,
+        "source_file_name": source_file_name,
+        "text_chunk": chunk,
+        "embedding": embedding
+    }
+
+
 def add_embeddings(user_id: str, chat_id: str, source_file_uuid: str, source_file_name: str,
                    chunks: list[str], embeddings: list[list[float]]):
     global VECTOR_STORE
@@ -67,16 +79,13 @@ def add_embeddings(user_id: str, chat_id: str, source_file_uuid: str, source_fil
             VECTOR_STORE[user_id][chat_id] = []
 
         for i, chunk in enumerate(chunks):
-            chunk_id = str(uuid.uuid4())
-            embedding = embeddings[i]
+            data_entry = _create_data_entry(
+                source_file_uuid=source_file_uuid,
+                source_file_name=source_file_name,
+                chunk=chunk,
+                embedding=embeddings[i]
+            )
 
-            data_entry = {
-                "chunk_id": chunk_id,
-                "source_file_uuid": source_file_uuid,
-                "source_file_name": source_file_name,
-                "text_chunk": chunk,
-                "embedding": embedding
-            }
             VECTOR_STORE[user_id][chat_id].append(data_entry)
             new_data_entries.append(data_entry)
 
