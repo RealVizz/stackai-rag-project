@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -20,6 +21,10 @@ BASE_STORAGE_RAW_DATA_FOLDER = BASE_DIR / "file_storage" / "raw_data"
 CHUNK_SIZE = 2048
 CHUNK_OVERLAP = 256
 
-VECTOR_DB_FILE_PATH = BASE_DIR / "api_main" / "db" / "vector_store.json"
-CHAT_HISTORY_FILE_PATH = BASE_DIR / "api_main" / "db" / "chat_history.json"
-KEYWORD_DB_FILE_PATH = BASE_DIR / "api_main" / "db" / "keyword_store.json"
+DB_DIR = BASE_DIR / "api_main" / "db"
+VECTOR_DB_FILE_PATH = DB_DIR / "vector_store.json"
+CHAT_HISTORY_FILE_PATH = DB_DIR / "chat_history.json"
+KEYWORD_DB_FILE_PATH = DB_DIR / "keyword_store.json"
+
+DATA_DIR = BASE_DIR / "api_main" / "data"
+STOP_WORDS_FILE_PATH = DATA_DIR / "stop_words.txt"

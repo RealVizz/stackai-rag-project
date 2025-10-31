@@ -4,20 +4,24 @@ import re
 import threading
 from pathlib import Path
 
-from config.config import KEYWORD_DB_FILE_PATH
+from config.config import KEYWORD_DB_FILE_PATH, STOP_WORDS_FILE_PATH
 
 _db_lock = threading.Lock()
 
-_STOP_WORDS = {"i", "me", "my", "myself", "we", "our", "ours", "ourselves", "you", "your", "yours", "yourself",
-               "yourselves", "he", "him", "his", "himself", "she", "her", "hers", "herself", "it", "its", "itself",
-               "they", "them", "their", "theirs", "themselves", "what", "which", "who", "whom", "this", "that", "these",
-               "those", "am", "is", "are", "was", "were", "be", "been", "being", "have", "has", "had", "having", "do",
-               "does", "did", "doing", "a", "an", "the", "and", "but", "if", "or", "because", "as", "until", "while",
-               "of", "at", "by", "for", "with", "about", "against", "between", "into", "through", "during", "before",
-               "after", "above", "below", "to", "from", "up", "down", "in", "out", "on", "off", "over", "under",
-               "again", "further", "then", "once", "here", "there", "when", "where", "why", "how", "all", "any", "both",
-               "each", "few", "more", "most", "other", "some", "such", "no", "nor", "not", "only", "own", "same", "so",
-               "than", "too", "very", "s", "t", "can", "will", "just", "don", "should", "now"}
+
+def _load_stop_words(file_path: Path) -> set:
+    if not file_path.exists():
+        print(f"Warning: Stop words file not found at {file_path}. Using empty set.")
+        return set()
+    try:
+        with open(file_path, "r") as f:
+            return {line.strip() for line in f if line.strip()}
+    except Exception as e:
+        print(f"Error loading stop words file: {e}. Using empty set.")
+        return set()
+
+
+_STOP_WORDS = _load_stop_words(STOP_WORDS_FILE_PATH)
 
 # Structure: { "user_id": { "chat_id": { "inverted_index": {"keyword": [chunk_id1, chunk_id2]} } } }
 KEYWORD_STORE: dict[str, dict[str, dict[str, dict]]] = {}
@@ -69,8 +73,14 @@ def _find_matching_chunk_ids(chat_index: dict, query_tokens: list[str]):
     try:
         matching_chunk_ids = set(chat_index.get(query_tokens[0], []))
 
+        # [optimization] If no matches for the first token, or only one token, we're done.
+        if not matching_chunk_ids or len(query_tokens) == 1:
+            return matching_chunk_ids
+
         for token in query_tokens[1:]:
             matching_chunk_ids.intersection_update(chat_index.get(token, []))
+            if not matching_chunk_ids:  # If intersection is empty, we can stop early.
+                return set()
 
         return matching_chunk_ids
     except Exception as e:
