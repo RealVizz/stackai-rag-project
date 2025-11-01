@@ -6,3 +6,4 @@ pdfplumber
 numpy
 ruff
 python-dotenv
+pydantic

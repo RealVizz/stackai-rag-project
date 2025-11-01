@@ -6,23 +6,20 @@ from fastapi import FastAPI, Form, UploadFile, File, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
+from api_main.schemas import QueryRequest, HistoryRequest, ChatsRequest
+from api_main.services.rag_service import process_pdf_upload, process_query
 from api_main.utils.chat_memory_helper import (
     load_chat_from_persistent_storage,
     get_chat_history,
-    add_chat_turn, get_all_user_ids, get_all_chat_ids_for_user
+    get_all_user_ids,
+    get_all_chat_ids_for_user
 )
 from api_main.utils.keyword_db_helper import (
-    load_keyword_db_from_persistent_storage,
-    add_chunks_to_index,
-    search_keywords
+    load_keyword_db_from_persistent_storage
 )
-from api_main.utils.mistral_helper import get_embeddings_from_str_list, get_embedding_from_str, get_llm_response
-from api_main.utils.pdf_helper import process_pdf, PDFProcessingError
+from api_main.utils.pdf_helper import PDFProcessingError
 from api_main.utils.vector_db_helper import (
-    add_embeddings,
-    load_vector_db_from_persistent_storage,
-    get_top_k_vector_results,
-    get_vector_store_chat_data
+    load_vector_db_from_persistent_storage
 )
 from config.config import BASE_STORAGE_RAW_DATA_FOLDER
 
@@ -33,7 +30,10 @@ async def lifespan(app: FastAPI):
     load_chat_from_persistent_storage()
     load_keyword_db_from_persistent_storage()
     yield
+
+
 app = FastAPI(lifespan=lifespan)
+
 
 @app.get("/")
 async def heartbeat():
@@ -67,104 +67,56 @@ async def upload_pdf_file(user_id: str = Form(...), chat_id: str = Form(...), fi
         with full_file_path.open("wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
-        try:
-            text_chunks = process_pdf(str(full_file_path))  # Use str() for Path object
-        except PDFProcessingError as e:
-            print(f"PDF processing failed for user {user_id}, chat {chat_id}: {e}")
-            if full_file_path and full_file_path.exists(): # Clean up the corrupt/unreadable file.
-                full_file_path.unlink()
-            raise HTTPException(status_code=400, detail=str(e))
+        message = process_pdf_upload(user_id=user_id, chat_id=chat_id, file=file, file_uuid=file_uuid,
+                                     full_file_path=full_file_path)
 
-        if not text_chunks:  # # Checking if any text was actually extracted and chunked
-            if full_file_path and full_file_path.exists():
-                full_file_path.unlink()
-            raise HTTPException(
-                status_code=400,
-                detail="No text could be processed from the PDF. The file might be empty or unreadable."
-            )
+        return {"status": "success", "message": message}
 
-        embeddings = get_embeddings_from_str_list(text_chunks)
+    except PDFProcessingError as e:
+        print(f"PDF processing failed for user {user_id}, chat {chat_id}: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
 
-        if not embeddings:
-            if full_file_path and full_file_path.exists():
-                full_file_path.unlink()
-            raise HTTPException(
-                status_code=500,
-                detail="Failed to generate embeddings for the document."
-            )
+    except ValueError as e:
+        print(f"Service layer error during upload for user {user_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
-        new_chunk_data = add_embeddings(user_id, chat_id, file_uuid, file.filename, text_chunks, embeddings)
-        add_chunks_to_index(user_id, chat_id, new_chunk_data)
+    except HTTPException:
+        raise  # Re-raise HTTPExceptions
 
-
-    except HTTPException:  # Re-raising HTTPExceptions so FastAPI handles them.
-        raise
-    except Exception as e:  # Generic.
+    except Exception as e:
         print(f"Unexpected error in /upload-pdf/ for user {user_id}: {e}")
         if full_file_path and full_file_path.exists():
-            full_file_path.unlink()
+            full_file_path.unlink()  # File cleanup.
         raise HTTPException(status_code=500, detail="An unexpected server error occurred.")
+
     finally:
         await file.close()
-
-    return {
-        "status": "success",
-        "message": "File uploaded successfully.",
-    }
 
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    return JSONResponse(
-        status_code=422,
-        content={
-            "message": "Invalid input. Please provide all required fields.",
-            # "errors": exc.errors()  # Include validation error details
-        },
-    )
+    return JSONResponse(status_code=422, content={"message": "Invalid input. Please provide all required fields."}, )
+
 
 @app.post("/query/")
-async def query(user_id: str = Form(...), chat_id: str = Form(...), query_str: str = Form(...)):
-    if not chat_id.strip() or not user_id.strip() or not query_str.strip():
-        raise HTTPException(
-            status_code=400,
-            detail="All 'chat_id', 'user_id' and 'query_str' are required and cannot be empty."
-        )
+async def query(request: QueryRequest):
+    try:
+        response_text = process_query(user_id=request.user_id, chat_id=request.chat_id, query_str=request.query_str)
+        return {"status": "success", "resp": response_text}
 
-    query_embeddings = get_embedding_from_str(query_str)
-    if not query_embeddings:
-        raise HTTPException(status_code=500, detail="Failed to generate query embedding.")
+    except ValueError as e:
+        print(f"Service layer error during query: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
-    all_chat_chunks = get_vector_store_chat_data(user_id, chat_id)
-
-    vector_res = get_top_k_vector_results(
-        chat_chunks_data=all_chat_chunks,
-        query_embedding=query_embeddings,
-        k=5,
-        threshold=0.5
-    )
-
-    keyword_res = search_keywords(user_id, chat_id, query_str, all_chat_chunks)
-    current_chat_history = get_chat_history(user_id, chat_id)
-    resp = get_llm_response(user_query=query_str, vector_results=vector_res, keyword_results=keyword_res,
-                            chat_history=current_chat_history, max_tokens=8192)
-    add_chat_turn(user_id, chat_id, query_str, resp)
-    return {
-        "status": "success",
-        "resp": resp
-    }
+    except Exception as e:
+        print(f"Unexpected error in /query/: {e}")
+        raise HTTPException(status_code=500, detail="An unexpected server error occurred.")
 
 
 @app.post("/get-chat-history/")
-async def get_chat_history_endpoint(user_id: str = Form(...), chat_id: str = Form(...)):
-    if not chat_id.strip() or not user_id.strip():
-        raise HTTPException(
-            status_code=400,
-            detail="Both 'chat_id' and 'user_id' are required and cannot be empty."
-        )
-
+async def get_chat_history_endpoint(request: HistoryRequest):
     try:
-        history = get_chat_history(user_id, chat_id)
+        history = get_chat_history(request.user_id, request.chat_id)
         return {
             "status": "success",
             "history": history
@@ -172,6 +124,7 @@ async def get_chat_history_endpoint(user_id: str = Form(...), chat_id: str = For
     except Exception as e:
         print(f"Error retrieving chat history: {e}")
         raise HTTPException(status_code=500, detail="Could not retrieve chat history.")
+
 
 @app.get("/users/")
 async def get_users():
@@ -190,19 +143,14 @@ async def get_users():
 
 
 @app.post("/chats/")
-async def get_chats_for_user(user_id: str = Form(...)):
-    if not user_id.strip():
-        raise HTTPException(
-            status_code=400,
-            detail="'user_id' is required and cannot be empty."
-        )
+async def get_chats_for_user(request: ChatsRequest):
 
     try:
-        chat_ids = get_all_chat_ids_for_user(user_id)
+        chat_ids = get_all_chat_ids_for_user(request.user_id)
 
         return {
             "status": "success",
-            "user_id": user_id,
+            "user_id": request.user_id,
             "chat_ids": chat_ids
         }
     except Exception as e:
