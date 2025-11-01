@@ -124,7 +124,7 @@ def load_keyword_db_from_persistent_storage():  #load_keyword_db_from_persistent
             KEYWORD_STORE = {}
 
 
-def add_chunks_to_index(user_id: str, chat_id: str, chunks: list[dict]):
+def add_chunks_to_kw_db_index(user_id: str, chat_id: str, chunks: list[dict]):
     global KEYWORD_STORE
     with _db_lock:
         if user_id not in KEYWORD_STORE:

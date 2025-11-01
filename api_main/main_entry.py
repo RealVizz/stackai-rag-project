@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+from typing import List
 
 from fastapi import FastAPI, UploadFile, File, HTTPException, Request, Depends
 from fastapi.exceptions import RequestValidationError
@@ -49,9 +50,9 @@ async def heartbeat():
 
 
 @app.post("/upload-pdf/")
-async def upload_pdf_file(form_data: UploadForm = Depends(), file: UploadFile = File(...)):
+async def upload_pdf_file(form_data: UploadForm = Depends(), files: List[UploadFile] = File(...)):
     try:
-        message = process_pdf_upload(user_id=form_data.user_id, chat_id=form_data.chat_id, file=file)
+        message = process_pdf_upload(user_id=form_data.user_id, chat_id=form_data.chat_id, files=files)
         return {"status": "success", "message": message}
 
     except Exception as e:
@@ -59,7 +60,8 @@ async def upload_pdf_file(form_data: UploadForm = Depends(), file: UploadFile = 
         raise HTTPException(status_code=500, detail="An unexpected server error occurred.")
 
     finally:
-        await file.close()
+        for file in files:
+            await file.close()
 
 
 @app.post("/query/")
