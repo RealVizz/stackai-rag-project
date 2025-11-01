@@ -1,3 +1,4 @@
+from fastapi import Form
 from pydantic import BaseModel, Field
 
 
@@ -14,3 +15,9 @@ class HistoryRequest(BaseModel):
 
 class ChatsRequest(BaseModel):
     user_id: str = Field(..., min_length=1)
+
+
+class UploadForm:
+    def __init__(self, user_id: str = Form(..., min_length=1), chat_id: str = Form(..., min_length=1)):
+        self.user_id = user_id
+        self.chat_id = chat_id

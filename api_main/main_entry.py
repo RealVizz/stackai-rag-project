@@ -1,12 +1,10 @@
-import shutil
-import uuid
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Form, UploadFile, File, HTTPException, Request
+from fastapi import FastAPI, UploadFile, File, HTTPException, Request, Depends
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
-from api_main.schemas import QueryRequest, HistoryRequest, ChatsRequest
+from api_main.schemas import QueryRequest, HistoryRequest, ChatsRequest, UploadForm
 from api_main.services.rag_service import process_pdf_upload, process_query
 from api_main.utils.chat_memory_helper import (
     load_chat_from_persistent_storage,
@@ -21,7 +19,6 @@ from api_main.utils.pdf_helper import PDFProcessingError
 from api_main.utils.vector_db_helper import (
     load_vector_db_from_persistent_storage
 )
-from config.config import BASE_STORAGE_RAW_DATA_FOLDER
 
 
 @asynccontextmanager
@@ -35,82 +32,47 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 
+# --- Global exception handlers to keep endpoints clean ---
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    return JSONResponse(status_code=422, content={"message": "Invalid input. Please provide all required fields."})
+
+
+@app.exception_handler(PDFProcessingError)
+async def pdf_processing_exception_handler(request: Request, exc: PDFProcessingError):
+    print(f"PDF processing failed: {exc}")
+    return JSONResponse(status_code=400, content={"detail": str(exc)})
+
+
+@app.exception_handler(ValueError)
+async def value_error_exception_handler(request: Request, exc: ValueError):
+    print(f"Service layer value error: {exc}")
+    return JSONResponse(status_code=500, content={"detail": str(exc)})
+
 @app.get("/")
 async def heartbeat():
     return {"status": "ok"}
 
 
 @app.post("/upload-pdf/")
-async def upload_pdf_file(user_id: str = Form(...), chat_id: str = Form(...), file: UploadFile = File(...)):
-
-    if not file.filename.endswith(".pdf"):
-        raise HTTPException(
-            status_code=400,
-            detail="Unsupported file type, Only '.pdf' files are accepted."
-        )
-
-    if not chat_id.strip() or not user_id.strip():
-        raise HTTPException(
-            status_code=400,
-            detail="Both 'chat_id' and 'user_id' are required and cannot be empty."
-        )
-
-    full_file_path = None
+async def upload_pdf_file(form_data: UploadForm = Depends(), file: UploadFile = File(...)):
     try:
-        file_uuid = str(uuid.uuid4())
-        new_filename = f"{file_uuid}.pdf"
-
-        storage_path = BASE_STORAGE_RAW_DATA_FOLDER / f"user_id_{user_id}" / f"chat_id_{chat_id}"
-        storage_path.mkdir(parents=True, exist_ok=True)
-        full_file_path = storage_path / new_filename
-
-        with full_file_path.open("wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-
-        message = process_pdf_upload(user_id=user_id, chat_id=chat_id, file=file, file_uuid=file_uuid,
-                                     full_file_path=full_file_path)
-
+        message = process_pdf_upload(user_id=form_data.user_id, chat_id=form_data.chat_id, file=file)
         return {"status": "success", "message": message}
 
-    except PDFProcessingError as e:
-        print(f"PDF processing failed for user {user_id}, chat {chat_id}: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
-
-    except ValueError as e:
-        print(f"Service layer error during upload for user {user_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-    except HTTPException:
-        raise  # Re-raise HTTPExceptions
-
     except Exception as e:
-        print(f"Unexpected error in /upload-pdf/ for user {user_id}: {e}")
-        if full_file_path and full_file_path.exists():
-            full_file_path.unlink()  # File cleanup.
+        print(f"Unexpected error in /upload-pdf/: {e}")
         raise HTTPException(status_code=500, detail="An unexpected server error occurred.")
 
     finally:
         await file.close()
 
 
-@app.exception_handler(RequestValidationError)
-async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    return JSONResponse(status_code=422, content={"message": "Invalid input. Please provide all required fields."}, )
-
-
 @app.post("/query/")
 async def query(request: QueryRequest):
-    try:
-        response_text = process_query(user_id=request.user_id, chat_id=request.chat_id, query_str=request.query_str)
-        return {"status": "success", "resp": response_text}
-
-    except ValueError as e:
-        print(f"Service layer error during query: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-    except Exception as e:
-        print(f"Unexpected error in /query/: {e}")
-        raise HTTPException(status_code=500, detail="An unexpected server error occurred.")
+    response_text = process_query(user_id=request.user_id, chat_id=request.chat_id, query_str=request.query_str)
+    return {"status": "success", "resp": response_text}
 
 
 @app.post("/get-chat-history/")

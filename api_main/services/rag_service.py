@@ -1,4 +1,5 @@
-from pathlib import Path
+import shutil
+import uuid
 
 from fastapi import UploadFile
 
@@ -8,10 +9,25 @@ from api_main.utils.mistral_helper import get_embeddings_from_str_list, get_embe
 from api_main.utils.pdf_helper import process_pdf, PDFProcessingError
 from api_main.utils.vector_db_helper import add_embeddings, get_vector_store_chat_data
 from api_main.utils.vector_db_helper import get_top_k_vector_results
+from config.config import BASE_STORAGE_RAW_DATA_FOLDER
 
 
-def process_pdf_upload(user_id: str, chat_id: str, file: UploadFile, file_uuid: str, full_file_path: Path) -> str:
+def process_pdf_upload(user_id: str, chat_id: str, file: UploadFile) -> str:
+    if not file.filename.endswith(".pdf"):
+        raise PDFProcessingError("Unsupported file type, Only '.pdf' files are accepted.")
+
+    full_file_path = None
     try:
+        file_uuid = str(uuid.uuid4())
+        new_filename = f"{file_uuid}.pdf"
+
+        storage_path = BASE_STORAGE_RAW_DATA_FOLDER / f"user_id_{user_id}" / f"chat_id_{chat_id}"
+        storage_path.mkdir(parents=True, exist_ok=True)
+        full_file_path = storage_path / new_filename
+
+        with full_file_path.open("wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+
         text_chunks = process_pdf(str(full_file_path))
         if not text_chunks:
             raise PDFProcessingError("No text could be processed from the PDF. The file might be empty or unreadable.")
