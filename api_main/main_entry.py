@@ -7,18 +7,11 @@ from fastapi.responses import JSONResponse
 from api_main.schemas import QueryRequest, HistoryRequest, ChatsRequest, UploadForm
 from api_main.services.rag_service import process_pdf_upload, process_query
 from api_main.utils.chat_memory_helper import (
-    load_chat_from_persistent_storage,
-    get_chat_history,
-    get_all_user_ids,
-    get_all_chat_ids_for_user
+    load_chat_from_persistent_storage, get_chat_history, get_all_user_ids, get_all_chat_ids_for_user
 )
-from api_main.utils.keyword_db_helper import (
-    load_keyword_db_from_persistent_storage
-)
+from api_main.utils.keyword_db_helper import load_keyword_db_from_persistent_storage
 from api_main.utils.pdf_helper import PDFProcessingError
-from api_main.utils.vector_db_helper import (
-    load_vector_db_from_persistent_storage
-)
+from api_main.utils.vector_db_helper import load_vector_db_from_persistent_storage
 
 
 @asynccontextmanager
