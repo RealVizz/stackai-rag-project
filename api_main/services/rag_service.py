@@ -6,7 +6,8 @@ from fastapi import UploadFile
 
 from api_main.utils.chat_memory_helper import get_chat_history, add_chat_turn
 from api_main.utils.keyword_db_helper import add_chunks_to_kw_db_index, search_keywords
-from api_main.utils.mistral_helper import get_embeddings_from_str_list, get_embedding_from_str, get_llm_response
+from api_main.utils.mistral_helper import (get_embeddings_from_str_list, get_embedding_from_str, get_llm_response,
+                                           merge_and_rerank)
 from api_main.utils.pdf_helper import process_pdf, PDFProcessingError
 from api_main.utils.vector_db_helper import add_embeddings, get_vector_store_chat_data
 from api_main.utils.vector_db_helper import get_top_k_vector_results
@@ -104,12 +105,12 @@ def process_query(user_id: str, chat_id: str, query_str: str) -> str:
     )
 
     keyword_res = search_keywords(user_id, chat_id, query_str, all_chat_chunks)
+    reranked_results = merge_and_rerank(vector_res, keyword_res)
     current_chat_history = get_chat_history(user_id, chat_id)
 
     resp = get_llm_response(
         user_query=query_str,
-        vector_results=vector_res,
-        keyword_results=keyword_res,
+        reranked_results=reranked_results,
         chat_history=current_chat_history,
         max_tokens=8192
     )

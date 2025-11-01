@@ -28,20 +28,49 @@ def get_embedding_from_str(query_text: str) -> list[float]:
     return embeddings[0] if embeddings else []
 
 
-def _build_context_string(vector_results: list[dict], keyword_results: list[dict]):
+def _merge_and_deduplicate_chunks(vector_results: list[dict], keyword_results: list[dict]) -> dict:
     all_chunks = {}
-
     for item in vector_results + keyword_results:
         text = item.get("text_chunk")
+        score = item.get("score", 0.0)
+        source = item.get("source_file_name", "unknown")
         if text:
-            source = item.get("source_file_name", "unknown")
-            all_chunks[text] = source
+            if text not in all_chunks or score > all_chunks[text]["score"]:
+                all_chunks[text] = {"score": score, "source": source}
+    return all_chunks
 
+
+def _rerank_chunks(all_chunks: dict) -> list[dict]:
     if not all_chunks:
+        return []
+
+    reranked_list = [
+        {
+            "text_chunk": text,
+            "score": data["score"],
+            "source_file_name": data["source"]
+        }
+        for text, data in all_chunks.items()
+    ]
+
+    reranked_list.sort(key=lambda x: x["score"], reverse=True)
+    return reranked_list
+
+
+def merge_and_rerank(vector_results: list[dict], keyword_results: list[dict]) -> list[dict]:
+    all_chunks = _merge_and_deduplicate_chunks(vector_results, keyword_results)
+    reranked_list = _rerank_chunks(all_chunks)
+    return reranked_list
+
+
+def _build_context_string(reranked_results: list[dict]):
+    if not reranked_results:
         return "No relevant context found."
 
     context_with_citations = []
-    for i, (text, source) in enumerate(all_chunks.items()):
+    for i, item in enumerate(reranked_results):
+        text = item.get("text_chunk")
+        source = item.get("source_file_name")
         context_with_citations.append(f"[Source {i + 1}, file: {source}]:\n{text}")
 
     return "\n\n---\n\n".join(context_with_citations)
@@ -150,13 +179,13 @@ def _prepare_main_llm_messages(user_query: str, context_string: str, chat_histor
     return _manage_token_limit(messages, max_tokens)
 
 
-def get_llm_response(user_query: str, vector_results: list[dict], keyword_results: list[dict],
+def get_llm_response(user_query: str, reranked_results: list[dict],
                      chat_history: list[dict] = None, max_tokens: int = 8192):
     if chat_history is None:
         chat_history = []
 
     try:
-        context_string = _build_context_string(vector_results, keyword_results)
+        context_string = _build_context_string(reranked_results)
         messages_to_send = _prepare_main_llm_messages(user_query, context_string, chat_history, max_tokens)
         raw_answer = _execute_llm_call(messages_to_send, temperature=0.1)
 
