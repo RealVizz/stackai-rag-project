@@ -38,10 +38,15 @@ def _save_to_disk():
         print(f"Error saving keyword store to disk: {e}")
 
 
-def _tokenize_text(text: str):
-    """Removes punctuation, lowercases, and filters stop words."""
-    words = re.findall(r'\b\w+\b', text.lower())
-    return [word for word in words if word not in _STOP_WORDS and len(word) > 2]
+def _clean_and_tokenize(text: str) -> list[str]:
+    """Removes punctuation, lowercases, and splits into words."""
+    if not text:
+        return []
+    return re.findall(r'\b\w+\b', text.lower())
+
+
+def _filter_stop_words(tokens: list[str]) -> list[str]:
+    return [word for word in tokens if word not in _STOP_WORDS and len(word) > 2]
 
 
 def _update_index_for_chunks(inverted_index: dict, chunks: list[dict]):
@@ -52,8 +57,11 @@ def _update_index_for_chunks(inverted_index: dict, chunks: list[dict]):
         if not chunk_id or not text_chunk:
             continue
 
-        tokens = _tokenize_text(text_chunk)
-        for token in tokens:
+        # --- UPDATED: Use new refactored functions ---
+        tokens = _clean_and_tokenize(text_chunk)
+        filtered_tokens = _filter_stop_words(tokens)
+
+        for token in filtered_tokens:
             if token not in inverted_index:
                 inverted_index[token] = []
             if chunk_id not in inverted_index[token]:
@@ -109,7 +117,7 @@ def _build_results_from_chunk_ids(all_chat_chunks: list[dict], chunk_ids: set):
     return final_results
 
 
-def load_keyword_db_from_persistent_storage():  #load_keyword_db_from_persistent_storage
+def load_keyword_db_from_persistent_storage():  # load_keyword_db_from_persistent_storage
     global KEYWORD_STORE
     with _db_lock:
         if os.path.exists(KEYWORD_DB_FILE_PATH):
@@ -147,11 +155,13 @@ def search_keywords(user_id: str, chat_id: str, query_str: str, all_chat_chunks:
     if not chat_index:
         return []
 
-    query_tokens = _tokenize_text(query_str)
-    if not query_tokens:
+    query_tokens = _clean_and_tokenize(query_str)
+    filtered_query_tokens = _filter_stop_words(query_tokens)
+
+    if not filtered_query_tokens:
         return []
 
-    matching_chunk_ids = _find_matching_chunk_ids(chat_index, query_tokens)
+    matching_chunk_ids = _find_matching_chunk_ids(chat_index, filtered_query_tokens)
     if not matching_chunk_ids:
         return []
 
