@@ -7,7 +7,7 @@ from fastapi import UploadFile
 from api_main.utils.chat_memory_helper import get_chat_history, add_chat_turn
 from api_main.utils.keyword_db_helper import add_chunks_to_kw_db_index, search_keywords
 from api_main.utils.mistral_helper import (get_embeddings_from_str_list, get_embedding_from_str, get_llm_response,
-                                           merge_and_rerank)
+                                           merge_and_rerank, get_query_intent, get_chitchat_response)
 from api_main.utils.pdf_helper import process_pdf, PDFProcessingError
 from api_main.utils.vector_db_helper import add_embeddings, get_vector_store_chat_data
 from api_main.utils.vector_db_helper import get_top_k_vector_results
@@ -90,7 +90,10 @@ def process_pdf_upload(user_id: str, chat_id: str, files: List[UploadFile]):
     return results
 
 
-def process_query(user_id: str, chat_id: str, query_str: str) -> str:
+def _handle_rag_query(user_id: str, chat_id: str, query_str: str, current_chat_history: list[dict]):
+    """
+    Handles the full RAG pipeline: embedding, search, re-rank, and fact-checked response.
+    """
     query_embeddings = get_embedding_from_str(query_str)
     if not query_embeddings:
         raise ValueError("Failed to generate query embedding.")
@@ -106,7 +109,6 @@ def process_query(user_id: str, chat_id: str, query_str: str) -> str:
 
     keyword_res = search_keywords(user_id, chat_id, query_str, all_chat_chunks)
     reranked_results = merge_and_rerank(vector_res, keyword_res)
-    current_chat_history = get_chat_history(user_id, chat_id)
 
     resp = get_llm_response(
         user_query=query_str,
@@ -114,7 +116,24 @@ def process_query(user_id: str, chat_id: str, query_str: str) -> str:
         chat_history=current_chat_history,
         max_tokens=8192
     )
+    return resp
+
+
+def process_query(user_id: str, chat_id: str, query_str: str):
+    current_chat_history = get_chat_history(user_id, chat_id)
+    intent = get_query_intent(query_str, current_chat_history)
+    # print(f"Query intent classified as: {intent}") # for logging
+
+    if intent == "RAG_QUERY":
+        resp = _handle_rag_query(user_id, chat_id, query_str, current_chat_history)
+    elif intent == "CHITCHAT":
+        resp = get_chitchat_response(query_str, current_chat_history)
+    elif intent == "REFUSAL":
+        resp = "I'm sorry, I cannot answer questions on that topic or handle that request."
+
+    else:  # Fallback in case of unexpected classification
+        print(f"Warning: Unexpected intent '{intent}'. Defaulting to RAG query.")
+        resp = _handle_rag_query(user_id, chat_id, query_str, current_chat_history)
 
     add_chat_turn(user_id, chat_id, query_str, resp)
-
     return resp

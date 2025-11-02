@@ -17,3 +17,36 @@ Your sole task is to determine if the Claim can be 'reasonably inferred',
 from EITHER the Document Context OR the Chat History.
 Respond with 'only' the single word 'true' or the single word 'false'.
 """
+
+INTENT_CLASSIFICATION_PROMPT = """
+You are an expert query classifier. 
+Your sole task is to classify the user's 'Last Utterance' into one of the following categories, 
+based on the 'Chat History':
+
+1.  "RAG_QUERY": The user is asking a question that requires searching the knowledge base
+                 (e.g., "what is...?", "tell me about...", "summarize...").
+                
+2.  "CHITCHAT": The user is making a greeting, a salutation, or a general conversational remark 
+                (e.g., "hello", "how are you?", "that's cool", "thanks!").
+                
+3.  "REFUSAL": The user is asking a harmful question, asking for PII, or making a request you should refuse.
+
+Respond with 'only' the category name (e.g., "RAG_QUERY", "CHITCHAT", or "REFUSAL").
+
+--- CHAT HISTORY ---
+{chat_history}
+--- END CHAT HISTORY ---
+
+--- LAST UTTERANCE ---
+{user_query}
+--- END LAST UTTERANCE ---
+
+Classification:
+"""
+
+CHITCHAT_SYSTEM_PROMPT = """
+You are a friendly and helpful conversational assistant.
+Your task is to provide a polite, conversational response to the user.
+Keep your answers brief and natural.
+Do not mention documents, context, or sources.
+"""

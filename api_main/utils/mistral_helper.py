@@ -2,7 +2,8 @@ import re
 
 from mistralai import Mistral
 
-from api_main.utils.prompts import MAIN_SYSTEM_PROMPT, FACT_CHECK_SYSTEM_PROMPT
+from api_main.utils.prompts import (MAIN_SYSTEM_PROMPT, FACT_CHECK_SYSTEM_PROMPT, INTENT_CLASSIFICATION_PROMPT,
+                                    CHITCHAT_SYSTEM_PROMPT)
 from config.config import MISTRAL_API_KEY
 
 client = Mistral(api_key=MISTRAL_API_KEY)
@@ -201,3 +202,60 @@ def get_llm_response(user_query: str, reranked_results: list[dict],
     except Exception as e:
         print(f"Error in get_llm_response: {e}")
         return "I'm sorry, but I encountered an error trying to generate a response."
+
+
+def get_query_intent(user_query: str, chat_history: list[dict]):
+    """
+    Classifies the user's query into 'RAG_QUERY', 'CHITCHAT', or 'REFUSAL'.
+    """
+    history_string = "\n".join([f"{msg['role']}: {msg['content']}" for msg in chat_history])
+    if not history_string:
+        history_string = "No history."
+
+    prompt = INTENT_CLASSIFICATION_PROMPT.format(
+        chat_history=history_string,
+        user_query=user_query
+    )
+
+    messages = [{"role": "user", "content": prompt}]
+
+    try:
+        classification = _execute_llm_call(messages, temperature=0.0).strip().upper()  # low temp for classification.
+
+        # coded this way deliberately, to make it more robust.
+        if "RAG_QUERY" in classification:  # "RAG_QUERY" will be in 'RAG_QUERY." and 'RAG_QUERY\n' "
+            return "RAG_QUERY"
+        elif "CHITCHAT" in classification:  # "CHITCHAT" will be in 'CHITCHAT\t" and '  CHITCHAT  ' "
+            return "CHITCHAT"
+        elif "REFUSAL" in classification:
+            return "REFUSAL"
+        else:
+            print(f"Warning: Intent classification returned an unexpected value: '{classification}'. "
+                  f"Defaulting to RAG_QUERY.")
+            return "RAG_QUERY"  # Default to safety/RAG
+
+    except Exception as e:
+        print(f"Error during intent classification: {e}. Defaulting to RAG_QUERY.")
+        return "RAG_QUERY"  # Default to RAG on error
+
+
+def get_chitchat_response(user_query: str, chat_history: list[dict] = None):
+    """
+    Generates a simple conversational response, skipping RAG and fact-checking.
+    """
+    if chat_history is None:
+        chat_history = []
+
+    messages = list()
+    messages.append({"role": "system", "content": CHITCHAT_SYSTEM_PROMPT})
+    messages.extend(chat_history)
+    messages.append({"role": "user", "content": user_query})
+
+    # eased up the token limit for chitchat.
+    messages = _manage_token_limit(messages, max_tokens=4096)
+
+    try:
+        return _execute_llm_call(messages, temperature=0.5)  # higher temp. for more natural, less robotic chitchat.
+    except Exception as e:
+        print(f"Error in get_chitchat_response: {e}")
+        return "I'm sorry, but I encountered an error."
