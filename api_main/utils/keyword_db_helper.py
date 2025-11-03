@@ -135,8 +135,8 @@ def _calculate_tfidf_scores(chat_keyword_data: dict, matching_chunk_ids: set, fi
     idf_scores = {}
     for term in filtered_query_tokens:
         num_chunks_with_term = len(inverted_index.get(term, []))
-        # Standard IDF formula, adding 1 to denominator to avoid division by zero
-        idf_scores[term] = math.log(total_chunks / (1 + num_chunks_with_term))
+        # Using a standard "IDF Smooth" formula to prevent zero scores for common terms.
+        idf_scores[term] = math.log(1 + (total_chunks / (1 + num_chunks_with_term)))
 
     # Calc. TF-IDF score for each chunk.
     for chunk_id in matching_chunk_ids:

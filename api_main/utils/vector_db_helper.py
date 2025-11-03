@@ -72,11 +72,14 @@ def add_embeddings(user_id: str, chat_id: str, source_file_uuid: str, source_fil
 
     new_data_entries = []
 
-    with _db_lock:  # Acquiring the lock for the entire operation
-        if user_id not in VECTOR_STORE:
-            VECTOR_STORE[user_id] = {}
-        if chat_id not in VECTOR_STORE[user_id]:
-            VECTOR_STORE[user_id][chat_id] = []
+    with _db_lock:
+        user_chats = VECTOR_STORE.get(user_id)
+        if not isinstance(user_chats, dict):
+            user_chats = {}
+            VECTOR_STORE[user_id] = user_chats
+
+        if chat_id not in user_chats:
+            user_chats[chat_id] = []
 
         for i, chunk in enumerate(chunks):
             data_entry = _create_data_entry(
@@ -86,19 +89,25 @@ def add_embeddings(user_id: str, chat_id: str, source_file_uuid: str, source_fil
                 embedding=embeddings[i]
             )
 
-            VECTOR_STORE[user_id][chat_id].append(data_entry)
+            user_chats[chat_id].append(data_entry)
             new_data_entries.append(data_entry)
 
         _save_to_disk()
 
-    # Return the newly created chunk data so it can be indexed
     return new_data_entries
 
 
 def get_vector_store_chat_data(user_id: str, chat_id: str):
     with _db_lock:
-        vector_store_chat_data = VECTOR_STORE.get(user_id, {}).get(chat_id, [])
-        return list(vector_store_chat_data)
+        user_chats = VECTOR_STORE.get(user_id, {})
+        if not isinstance(user_chats, dict):
+            return []
+
+        chat_data = user_chats.get(chat_id, [])
+        if not isinstance(chat_data, list):
+            return []
+
+        return list(chat_data)
 
 def _get_unique_chunks_from(all_chunks: list[dict]):
     unique_chunks_map = {}

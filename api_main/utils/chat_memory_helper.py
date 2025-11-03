@@ -1,8 +1,9 @@
 import json
 import os
 import threading
-from config.config import CHAT_HISTORY_FILE_PATH
 from pathlib import Path
+
+from config.config import CHAT_HISTORY_FILE_PATH
 
 _chat_lock = threading.Lock()
 
@@ -37,20 +38,30 @@ def load_chat_from_persistent_storage():
 def add_chat_turn(user_id: str, chat_id: str, user_query: str, assistant_response: str):
     global CHAT_HISTORY_STORE
     with _chat_lock:
-        if user_id not in CHAT_HISTORY_STORE:
-            CHAT_HISTORY_STORE[user_id] = {}
-        if chat_id not in CHAT_HISTORY_STORE[user_id]:
-            CHAT_HISTORY_STORE[user_id][chat_id] = []
+        user_chats = CHAT_HISTORY_STORE.get(user_id)
+        if not isinstance(user_chats, dict):
+            user_chats = {}
+            CHAT_HISTORY_STORE[user_id] = user_chats
 
-        CHAT_HISTORY_STORE[user_id][chat_id].append({"role": "user", "content": user_query})
-        CHAT_HISTORY_STORE[user_id][chat_id].append({"role": "assistant", "content": assistant_response})
+        if chat_id not in user_chats:
+            user_chats[chat_id] = []
+
+        user_chats[chat_id].append({"role": "user", "content": user_query})
+        user_chats[chat_id].append({"role": "assistant", "content": assistant_response})
 
         _save_chat_to_disk()
 
 
 def get_chat_history(user_id: str, chat_id: str):
     with _chat_lock:
-        history = CHAT_HISTORY_STORE.get(user_id, {}).get(chat_id, [])
+        user_chats = CHAT_HISTORY_STORE.get(user_id, {})
+        if not isinstance(user_chats, dict):
+            return []
+
+        history = user_chats.get(chat_id, [])
+        if not isinstance(history, list):
+            return []
+            
         return list(history)
 
 def get_all_user_ids():
@@ -59,4 +70,7 @@ def get_all_user_ids():
 
 def get_all_chat_ids_for_user(user_id: str):
     with _chat_lock:
-        return list(CHAT_HISTORY_STORE.get(user_id, {}).keys())
+        user_chats = CHAT_HISTORY_STORE.get(user_id, {})
+        if not isinstance(user_chats, dict):
+            return []
+        return list(user_chats.keys())

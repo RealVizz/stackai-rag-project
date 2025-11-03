@@ -1,4 +1,5 @@
 import pdfplumber
+
 from config.config import CHUNK_SIZE, CHUNK_OVERLAP
 
 
@@ -26,6 +27,9 @@ def extract_text_from_pdf(file_path: str) -> str:
 
 
 def simple_chunker(text: str, chunk_size: int, chunk_overlap: int) -> list[str]:
+    if chunk_overlap >= chunk_size:
+        raise ValueError("chunk_overlap must be smaller than chunk_size.")
+
     if not text.strip():
         return []
 
