@@ -15,7 +15,7 @@ class SimilarityMetric(Enum):
     EUCLIDEAN = "euclidean"
 
 
-_db_lock = threading.Lock()
+_db_lock = threading.RLock()  # Using a re-entrant lock to prevent deadlocks
 
 VECTOR_STORE: dict[str, dict[str, list[dict]]] = {}
 
@@ -108,6 +108,25 @@ def get_vector_store_chat_data(user_id: str, chat_id: str):
             return []
 
         return list(chat_data)
+
+
+def get_uploaded_files_for_chat(user_id: str, chat_id: str):
+    with _db_lock:
+        chat_data = get_vector_store_chat_data(user_id, chat_id)
+        if not chat_data:
+            return []
+
+        unique_filenames = set()
+        file_metadata_list = []
+
+        for chunk in chat_data:
+            filename = chunk.get("source_file_name")
+            if filename and filename not in unique_filenames:
+                unique_filenames.add(filename)
+                file_metadata_list.append({"filename": filename})
+
+        return file_metadata_list
+
 
 def _get_unique_chunks_from(all_chunks: list[dict]):
     unique_chunks_map = {}

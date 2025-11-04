@@ -5,14 +5,14 @@ from fastapi import FastAPI, UploadFile, File, HTTPException, Request, Depends
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
-from api_main.schemas import QueryRequest, HistoryRequest, ChatsRequest, UploadForm
+from api_main.schemas import QueryRequest, HistoryRequest, ChatsRequest, UploadForm, UploadedFilesRequest
 from api_main.services.rag_service import process_pdf_upload, process_query
 from api_main.utils.chat_memory_helper import (
     load_chat_from_persistent_storage, get_chat_history, get_all_user_ids, get_all_chat_ids_for_user
 )
 from api_main.utils.keyword_db_helper import load_keyword_db_from_persistent_storage
 from api_main.utils.pdf_helper import PDFProcessingError
-from api_main.utils.vector_db_helper import load_vector_db_from_persistent_storage
+from api_main.utils.vector_db_helper import load_vector_db_from_persistent_storage, get_uploaded_files_for_chat
 
 
 @asynccontextmanager
@@ -81,6 +81,19 @@ async def get_chat_history_endpoint(request: HistoryRequest):
     except Exception as e:
         print(f"Error retrieving chat history: {e}")
         raise HTTPException(status_code=500, detail="Could not retrieve chat history.")
+
+
+@app.post("/get-uploaded-files/")
+async def get_uploaded_files_endpoint(request: UploadedFilesRequest):
+    try:
+        files = get_uploaded_files_for_chat(request.user_id, request.chat_id)
+        return {
+            "status": "success",
+            "files": files
+        }
+    except Exception as e:
+        print(f"Error retrieving uploaded files: {e}")
+        raise HTTPException(status_code=500, detail="Could not retrieve uploaded files.")
 
 
 @app.get("/users/")

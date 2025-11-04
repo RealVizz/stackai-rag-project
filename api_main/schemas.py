@@ -13,6 +13,11 @@ class HistoryRequest(BaseModel):
     chat_id: str = Field(..., min_length=1)
 
 
+class UploadedFilesRequest(BaseModel):
+    user_id: str = Field(..., min_length=1)
+    chat_id: str = Field(..., min_length=1)
+
+
 class ChatsRequest(BaseModel):
     user_id: str = Field(..., min_length=1)
 

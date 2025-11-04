@@ -1,10 +1,11 @@
 import json
+import uuid
 
 import numpy as np
 import pytest
 
 from api_main.utils import vector_db_helper
-from api_main.utils.vector_db_helper import SimilarityMetric
+from api_main.utils.vector_db_helper import SimilarityMetric, add_embeddings, get_uploaded_files_for_chat
 
 # Sample data for embeddings
 SAMPLE_CHUNKS = ["the cat sat on the mat", "a dog chased the cat"]
@@ -128,3 +129,68 @@ def test_calculate_similarity_unknown_metric_raises_error():
     """Tests that an unknown similarity metric raises a ValueError."""
     with pytest.raises(ValueError, match="Unknown similarity metric: unknown"):
         vector_db_helper._calculate_similarity([1.0], [1.0], "unknown")
+
+
+def test_get_uploaded_files_for_chat_success():
+    """
+    Tests that the function correctly retrieves a unique list of filenames 
+    for a given user and chat ID.
+    """
+    user_id = "user1"
+    chat_id = "chat1"
+    add_embeddings(
+        user_id=user_id,
+        chat_id=chat_id,
+        source_file_uuid=str(uuid.uuid4()),
+        source_file_name="test_file_1.pdf",
+        chunks=["chunk 1 from file 1"],
+        embeddings=[[0.1, 0.2]]
+    )
+    add_embeddings(
+        user_id=user_id,
+        chat_id=chat_id,
+        source_file_uuid=str(uuid.uuid4()),
+        source_file_name="test_file_2.pdf",
+        chunks=["chunk 1 from file 2"],
+        embeddings=[[0.5, 0.6]]
+    )
+
+    uploaded_files = get_uploaded_files_for_chat(user_id, chat_id)
+
+    assert isinstance(uploaded_files, list)
+    assert len(uploaded_files) == 2
+    filenames = {file["filename"] for file in uploaded_files}
+    assert filenames == {"test_file_1.pdf", "test_file_2.pdf"}
+
+
+def test_get_uploaded_files_for_chat_no_files():
+    """
+    Tests that the function returns an empty list when no files have been 
+    uploaded for the specified user and chat ID.
+    """
+    uploaded_files = get_uploaded_files_for_chat("non_existent_user", "non_existent_chat")
+
+    assert isinstance(uploaded_files, list)
+    assert len(uploaded_files) == 0
+
+
+def test_get_uploaded_files_for_chat_multiple_chunks_same_file():
+    """
+    Tests that the function returns only one entry for a file, even if it has multiple chunks.
+    """
+    user_id = "user1"
+    chat_id = "chat1"
+    add_embeddings(
+        user_id=user_id,
+        chat_id=chat_id,
+        source_file_uuid=str(uuid.uuid4()),
+        source_file_name="single_file.pdf",
+        chunks=["chunk 1", "chunk 2", "chunk 3"],
+        embeddings=[[0.1, 0.1], [0.2, 0.2], [0.3, 0.3]]
+    )
+
+    uploaded_files = get_uploaded_files_for_chat(user_id, chat_id)
+
+    assert isinstance(uploaded_files, list)
+    assert len(uploaded_files) == 1
+    assert uploaded_files[0]["filename"] == "single_file.pdf"
