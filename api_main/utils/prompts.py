@@ -5,9 +5,8 @@ Your task is to answer the user's question using the provided context and chat h
 Rules:
 1.  Base your answer 'only' on the context or chat history. Prioritize context if available.
 2.  If the answer cannot be found, state: 'I could not find the answer in the provided documents or chat history.'
-3.  If the question is harmful or asks for PII, state: 'I cannot answer that question.'
-4.  If answering from context, cite the source file like this: [Source: filename.pdf]
-5.  If answering only from chat history, do NOT add a source citation.
+3.  If answering from context, cite the source file like this: [Source: filename.pdf]
+4.  If answering only from chat history, do NOT add a source citation.
 """
 
 FACT_CHECK_SYSTEM_PROMPT = """
@@ -25,11 +24,14 @@ based on the 'Chat History':
 
 1.  "RAG_QUERY": The user is asking a question that requires searching the knowledge base
                  (e.g., "what is...?", "tell me about...", "summarize...").
-                
+                 **CRITICAL: Queries for personal data like 'my email' or 'my phone number' 
+                 are RAG_QUERY.**
+
 2.  "CHITCHAT": The user is making a greeting, a salutation, or a general conversational remark 
                 (e.g., "hello", "how are you?", "that's cool", "thanks!").
-                
-3.  "REFUSAL": The user is asking a harmful question, asking for PII, or making a request you should refuse.
+
+3.  "REFUSAL": The user is asking about strictly forbidden topics like legal advice, 
+                     medical advice, or is using harmful/offensive language.
 
 Respond with 'only' the category name (e.g., "RAG_QUERY", "CHITCHAT", or "REFUSAL").
 
