@@ -1,12 +1,9 @@
-# streamlit_app/utils.py
-
 from typing import Any
 
 import requests
 
 # Configuration for the FastAPI backend URL
-# Make sure this matches where your FastAPI app is running
-BACKEND_URL = "http://127.0.0.1:11111"  # Updated to port 11111
+BACKEND_URL = "http://127.0.0.1:11111"
 
 
 def get_all_chat_ids_for_user(user_id: str) -> list[str]:
@@ -51,6 +48,8 @@ def query_backend(user_id: str, chat_id: str, query_str: str) -> str:
 
 def upload_pdf_to_backend(user_id: str, chat_id: str, files: list[Any]) -> list[dict[str, str]]:
     """Uploads PDF files to the backend for processing."""
+    if not user_id or not chat_id:
+        return [{"filename": "N/A", "status": "error", "message": "User ID and Chat ID are required for upload."}]
     uploaded_files_data = []
     for file_obj in files:
         uploaded_files_data.append(("files", (file_obj.name, file_obj.getvalue(), file_obj.type)))
