@@ -212,7 +212,6 @@ def page_user_dashboard():
                 st.session_state.chat_ids.append(new_chat_name)
                 st.session_state.chat_history = []
                 st.session_state.new_chat_name = ""
-                st.session_state.new_chat_name_input_widget = ""
                 st.session_state.user_view_chat = True
                 st.rerun()
         else:
