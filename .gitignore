@@ -3,3 +3,4 @@
 .venv
 /file_storage/
 /api_main/db/
+/docs/
