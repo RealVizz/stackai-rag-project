@@ -78,14 +78,20 @@ graph TD
 
 Follow these steps to set up and run the project locally.
 
-### 1. Clone the Repository
+### 1. Prerequisites
+
+- **Python 3.12** is required to run this project.
+
+### 2. Clone the Repository
+
+Clone the [UAT branch](https://github.com/RealVizz/stackai-rag-project/tree/UAT) of the repository:
 
 ```bash
-git clone <your-repo-url>
+git clone -b UAT --single-branch https://github.com/RealVizz/stackai-rag-project.git
 cd stackai-rag-project
 ```
 
-### 2. Set Up a Virtual Environment
+### 3. Set Up a Virtual Environment
 
 It is highly recommended to use a virtual environment to manage dependencies.
 
@@ -99,7 +105,7 @@ python3 -m venv venv
 source venv/bin/activate
 ```
 
-### 3. Install Dependencies
+### 4. Install Dependencies
 
 Install all the required Python libraries from the `requirements.txt` file.
 
@@ -107,7 +113,7 @@ Install all the required Python libraries from the `requirements.txt` file.
 pip install -r requirements.txt
 ```
 
-### 4. Set Up Environment Variables
+### 5. Set Up Environment Variables
 
 Create a `.env` file in the root directory of the project. This file will hold your Mistral AI API key.
 
@@ -117,7 +123,7 @@ MISTRAL_API_KEY="your_mistral_api_key_here"
 
 *Note: You can use the key `CF2DvjIoshzasO0mtBkPj44fo2nXDwPk` for evaluation purposes.*
 
-### 5. Run the Backend Server
+### 6. Run the Backend Server
 
 The backend is a FastAPI application. Run it using `uvicorn`.
 
@@ -128,7 +134,7 @@ uvicorn api_main.main_entry:app --host 127.0.0.1 --port 11111 --reload
 The server will be running at `http://127.0.0.1:11111`. The `--reload` flag will automatically restart the server when
 you make changes to the code.
 
-### 6. Run the Frontend Application
+### 7. Run the Frontend Application
 
 In a **new terminal**, run the Streamlit application.
 
